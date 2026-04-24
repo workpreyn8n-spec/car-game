@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Car Dodge Game</title>
+  <style>
+    body {
+      margin: 0;
+      background: #111;
+      color: #fff;
+      font-family: Arial, sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+    }
+    #game-container {
+      text-align: center;
+    }
+    canvas {
+      display: block;
+      background: #141414;
+      border: 4px solid #333;
+      box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+    }
+    p {
+      margin: 12px 0 0;
+      font-size: 16px;
+      color: #ddd;
+    }
+    .hint {
+      color: #8fcaff;
+    }
+  </style>
+</head>
+<body>
+  <div id="game-container">
+    <canvas id="gameCanvas" width="480" height="640"></canvas>
+    <p class="hint">Use arrow keys or WASD to move. Press R to restart after game over.</p>
+  </div>
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    const WIDTH = canvas.width;
+    const HEIGHT = canvas.height;
+    const LANE_PADDING = 60;
+    const CAR_WIDTH = 40;
+    const CAR_HEIGHT = 70;
+    const OBSTACLE_WIDTH = 40;
+    const OBSTACLE_HEIGHT = 70;
+    const PLAYER_SPEED = 5;
+
+    let player = {
+      x: WIDTH / 2 - CAR_WIDTH / 2,
+      y: HEIGHT - CAR_HEIGHT - 20,
+      width: CAR_WIDTH,
+      height: CAR_HEIGHT,
+    };
+
+    let obstacles = [];
+    let obstacleTimer = 0;
+    let score = 0;
+    let gameOver = false;
+    let keys = {};
+    let lastTime = 0;
+
+    function clamp(value, min, max) {
+      return Math.max(min, Math.min(max, value));
+    }
+
+    function drawRoad() {
+      ctx.fillStyle = '#141414';
+      ctx.fillRect(0, 0, WIDTH, HEIGHT);
+
+      ctx.fillStyle = '#323232';
+      ctx.fillRect(LANE_PADDING, 0, WIDTH - 2 * LANE_PADDING, HEIGHT);
+
+      ctx.fillStyle = '#dcdcdc';
+      for (let y = 0; y < HEIGHT; y += 40) {
+        ctx.fillRect(WIDTH / 2 - 5, y + 10, 10, 20);
+      }
+
+      ctx.strokeStyle = '#c8c8c8';
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.moveTo(LANE_PADDING, 0);
+      ctx.lineTo(LANE_PADDING, HEIGHT);
+      ctx.moveTo(WIDTH - LANE_PADDING, 0);
+      ctx.lineTo(WIDTH - LANE_PADDING, HEIGHT);
+      ctx.stroke();
+    }
+
+    function drawText(text, size, x, y, color = '#fff') {
+      ctx.fillStyle = color;
+      ctx.font = `${size}px Arial`;
+      ctx.textAlign = 'center';
+      ctx.fillText(text, x, y);
+    }
+
+    function spawnObstacle() {
+      const positions = [
+        LANE_PADDING + 20,
+        LANE_PADDING + 20 + (WIDTH - 2 * LANE_PADDING - OBSTACLE_WIDTH) / 2,
+        WIDTH - LANE_PADDING - OBSTACLE_WIDTH - 20,
+      ];
+      obstacles.push({
+        x: positions[Math.floor(Math.random() * positions.length)],
+        y: -OBSTACLE_HEIGHT,
+        speed: Math.random() * 4 + 4,
+      });
+    }
+
+    function resetGame() {
+      player.x = WIDTH / 2 - CAR_WIDTH / 2;
+      player.y = HEIGHT - CAR_HEIGHT - 20;
+      obstacles = [];
+      obstacleTimer = 0;
+      score = 0;
+      gameOver = false;
+      lastTime = performance.now();
+    }
+
+    function update(delta) {
+      if (!gameOver) {
+        score += delta * 0.01;
+      }
+
+      if (!gameOver) {
+        if (keys.ArrowLeft || keys.a) player.x -= PLAYER_SPEED;
+        if (keys.ArrowRight || keys.d) player.x += PLAYER_SPEED;
+        if (keys.ArrowUp || keys.w) player.y -= PLAYER_SPEED;
+        if (keys.ArrowDown || keys.s) player.y += PLAYER_SPEED;
+      }
+
+      player.x = clamp(player.x, LANE_PADDING + 5, WIDTH - LANE_PADDING - CAR_WIDTH - 5);
+      player.y = clamp(player.y, 0, HEIGHT - CAR_HEIGHT);
+
+      if (!gameOver) {
+        obstacleTimer += delta;
+        if (obstacleTimer > 700) {
+          obstacleTimer = 0;
+          spawnObstacle();
+        }
+
+        obstacles.forEach(obs => {
+          obs.y += obs.speed;
+        });
+
+        obstacles = obstacles.filter(obs => obs.y < HEIGHT + OBSTACLE_HEIGHT);
+
+        const playerRect = { x: player.x, y: player.y, width: player.width, height: player.height };
+        obstacles.forEach(obs => {
+          const obsRect = { x: obs.x, y: obs.y, width: OBSTACLE_WIDTH, height: OBSTACLE_HEIGHT };
+          if (
+            playerRect.x < obsRect.x + obsRect.width &&
+            playerRect.x + playerRect.width > obsRect.x &&
+            playerRect.y < obsRect.y + obsRect.height &&
+            playerRect.y + playerRect.height > obsRect.y
+          ) {
+            gameOver = true;
+          }
+        });
+      }
+    }
+
+    function draw() {
+      drawRoad();
+
+      ctx.fillStyle = '#00b4ff';
+      ctx.fillRect(player.x, player.y, player.width, player.height);
+      ctx.fillStyle = '#0084c0';
+      ctx.fillRect(player.x + 8, player.y + 12, player.width - 16, player.height - 24);
+
+      obstacles.forEach(obs => {
+        ctx.fillStyle = '#dc3232';
+        ctx.fillRect(obs.x, obs.y, OBSTACLE_WIDTH, OBSTACLE_HEIGHT);
+        ctx.fillStyle = '#b01f1f';
+        ctx.fillRect(obs.x + 6, obs.y + 10, OBSTACLE_WIDTH - 12, OBSTACLE_HEIGHT - 20);
+      });
+
+      drawText(`Score: ${Math.floor(score / 10)}`, 28, WIDTH / 2, 30);
+
+      if (gameOver) {
+        drawText('Game Over', 64, WIDTH / 2, HEIGHT / 2 - 40, '#ffd834');
+        drawText('Press R to restart', 32, WIDTH / 2, HEIGHT / 2 + 30);
+      }
+    }
+
+    function loop(timestamp) {
+      const delta = timestamp - lastTime;
+      lastTime = timestamp;
+      update(delta);
+      draw();
+      requestAnimationFrame(loop);
+    }
+
+    window.addEventListener('keydown', (event) => {
+      keys[event.key] = true;
+      if (event.key.toLowerCase() === 'r' && gameOver) {
+        resetGame();
+      }
+    });
+
+    window.addEventListener('keyup', (event) => {
+      keys[event.key] = false;
+    });
+
+    resetGame();
+    requestAnimationFrame(loop);
+  </script>
+</body>
+</html>
